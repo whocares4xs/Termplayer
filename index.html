@@ -1,0 +1,2219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<title>TERMPLAY</title>
+<style>
+  :root {
+    --black: #000000;
+    --white: #ffffff;
+    --red: #ff3b3b;
+    --green: #39ff6a;
+    --purple: #a259ff;
+    --dim: rgba(255,255,255,0.45);
+    --dim2: rgba(255,255,255,0.25);
+    --line: rgba(255,255,255,0.14);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: var(--black); color: var(--white);
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); }
+
+  /* ---------- Top bar ---------- */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(10px + var(--safe-top)) 14px 10px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  #topbar .brand { display: flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 2px; }
+  #topbar .brand .dot { color: var(--green); }
+  #topbar .lamps { display: flex; gap: 5px; }
+  #topbar .lamps span { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  #topbar .lamps .l1 { background: var(--red); }
+  #topbar .lamps .l2 { background: var(--green); }
+  #topbar .lamps .l3 { background: var(--purple); }
+
+  /* ---------- Main scroll area ---------- */
+  #main { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .view { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; padding-bottom: 12px; }
+  .view.active { display: block; }
+
+  .section-label {
+    padding: 12px 16px 8px; font-size: 11px; letter-spacing: 3px; color: var(--dim);
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top:0;
+    background: var(--black); z-index: 2; border-bottom: 1px solid var(--line);
+  }
+
+  /* ---------- Source picker chips (on Browse view) ---------- */
+  #sourceChips { display: flex; gap: 8px; padding: 12px 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #sourceChips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+    padding: 9px 14px; border: 1px solid var(--line); border-radius: 20px;
+    font-size: 12.5px; color: var(--dim); background: transparent; white-space: nowrap;
+  }
+  .chip.active { border-color: var(--red); color: var(--white); background: rgba(255,59,59,0.08); }
+  .chip .led { width: 6px; height: 6px; border-radius: 50%; background: var(--dim2); }
+  .chip .led.on { background: var(--green); }
+
+  /* ---------- Track/station list ---------- */
+  .track-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    width: 100%; background: transparent; border-left: 3px solid transparent; color: inherit;
+    text-align: left;
+  }
+  .track-row:active { background: rgba(255,255,255,0.06); }
+  .track-row.current { border-left-color: var(--red); background: rgba(255,59,59,0.08); }
+  .track-idx { color: var(--dim2); font-size: 12px; width: 22px; flex-shrink: 0; text-align: center; }
+  .track-idx .playing-ico { color: var(--green); }
+  .track-main { flex: 1; min-width: 0; }
+  .track-title { font-size: 14.5px; color: var(--white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-row.current .track-title { color: var(--red); }
+  .track-artist { font-size: 12px; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .live-badge { font-size: 9.5px; color: var(--green); border: 1px solid rgba(57,255,106,0.4); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+  .live-badge.blocked-badge { color: var(--red); border-color: rgba(255,59,59,0.4); }
+  .track-row.nav-row .track-title { color: var(--white); }
+  .track-row.nav-row .track-idx { color: var(--purple); }
+  .nav-folder { font-size: 13px; }
+  .nav-chevron { color: var(--dim2); font-size: 18px; flex-shrink: 0; }
+  .track-row.blocked { opacity: 0.55; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 60px 30px; gap: 12px; color: var(--dim); }
+  .empty-state .big-icon { font-size: 32px; opacity: 0.3; }
+  .empty-state .hint { font-size: 12px; color: var(--dim2); max-width: 260px; line-height: 1.5; }
+  .empty-state .accent { color: var(--purple); }
+  .btn-outline {
+    border: 1px solid rgba(57,255,106,0.4); color: var(--green); background: transparent;
+    padding: 10px 18px; border-radius: 6px; font-size: 12.5px; letter-spacing: 1px;
+  }
+  .btn-outline:active { background: rgba(57,255,106,0.12); }
+
+  /* ---------- Radio sub-navigation ---------- */
+  #radioSubnav { display: none; gap: 8px; padding: 2px 14px 12px; overflow-x: auto; }
+  #radioSubnav.show { display: flex; }
+  #radioSubnav::-webkit-scrollbar { display: none; }
+  .subnav-btn {
+    flex-shrink: 0; font-size: 12px; padding: 7px 13px; border-radius: 14px; border: 1px solid var(--line);
+    color: var(--dim); background: none; display: flex; align-items: center; gap: 5px;
+  }
+  .subnav-btn.active { color: var(--green); border-color: rgba(57,255,106,0.5); background: rgba(57,255,106,0.07); }
+
+  /* ---------- Picker panel (country/genre grids) ---------- */
+  #pickerPanel { display: none; }
+  #pickerPanel.show { display: block; border-bottom: 1px solid var(--line); }
+  .picker-search { padding: 8px 14px; }
+  .picker-search input {
+    width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--line); color: var(--white);
+    padding: 9px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  .picker-search input::placeholder { color: var(--dim2); }
+  .picker-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 14px 14px; max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .picker-chip {
+    font-size: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--white);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .picker-chip:active { border-color: var(--purple); }
+  .picker-chip .cnt { color: var(--dim2); font-size: 10.5px; }
+  .picker-loading, .picker-empty { padding: 20px 14px; color: var(--dim2); font-size: 12px; text-align: center; }
+
+  /* ---------- List loading / error state ---------- */
+  .list-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 30px; color: var(--dim); font-size: 13px; }
+  .list-loading .spinner {
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--green);
+    animation: spin 0.8s linear infinite;
+  }
+
+  /* ---------- Local import bar ---------- */
+  #localImportBar { display: none; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #localImportBar.show { display: block; }
+  #localImportBtn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    border: 1px solid rgba(57,255,106,0.4); color: var(--green); background: rgba(57,255,106,0.05);
+    padding: 12px; border-radius: 8px; font-size: 12.5px; letter-spacing: 1px;
+  }
+  #localImportBtn:active { background: rgba(57,255,106,0.14); }
+
+  /* ---------- Home server connect panel ---------- */
+  #serverConnectPanel { display: none; padding: 14px; border-bottom: 1px solid var(--line); }
+  #serverConnectPanel.show { display: block; }
+  #serverConnectPanel .sv-label { font-size: 11px; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 8px; }
+  #serverConnectPanel .sv-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  #serverUrlInput {
+    flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--line); color: var(--white);
+    padding: 11px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  #serverUrlInput::placeholder { color: var(--dim2); }
+  #serverConnectBtn {
+    border: 1px solid rgba(162,89,255,0.5); color: var(--purple); background: rgba(162,89,255,0.06);
+    padding: 0 16px; border-radius: 8px; font-size: 12.5px; white-space: nowrap;
+  }
+  #serverConnectBtn:active { background: rgba(162,89,255,0.16); }
+  #serverConnectBtn:disabled { opacity: 0.5; }
+  .sv-hint { font-size: 11px; color: var(--dim2); line-height: 1.5; }
+  .sv-error { font-size: 11.5px; color: var(--red); margin-top: 6px; line-height: 1.5; }
+  .sv-connected-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sv-connected-info { font-size: 12px; color: var(--green); display: flex; align-items: center; gap: 6px; }
+  .sv-connected-info .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .sv-disconnect-btn { font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; }
+  .sv-disconnect-btn:active { border-color: var(--red); color: var(--red); }
+
+  /* ---------- Home server breadcrumb ---------- */
+  #serverBreadcrumb { display: none; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #serverBreadcrumb.show { display: flex; }
+  #serverBreadcrumb .bc-back {
+    display: flex; align-items: center; gap: 4px; color: var(--purple); font-size: 12.5px; background: none; border: none; flex-shrink: 0;
+  }
+  #serverBreadcrumb .bc-path { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---------- Search bar ---------- */
+  #searchWrap { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  #searchInput {
+    flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--line); color: var(--white);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none;
+  }
+  #searchInput::placeholder { color: var(--dim2); }
+  #searchClear { color: var(--dim); font-size: 13px; padding: 6px; display: none; }
+
+  /* ---------- Now Playing view ---------- */
+  #nowplayingView { display: flex; flex-direction: column; align-items: center; padding: 24px 20px 10px; text-align: center; }
+  #npArt {
+    width: min(88vw, 380px); height: min(52vw, 220px); border-radius: 10px;
+    border: 1px solid var(--line); position: relative; overflow: hidden;
+    margin-bottom: 24px; background: #000;
+  }
+  #npCanvas { width: 100%; height: 100%; display: block; }
+  #npArtLabel {
+    position: absolute; top: 8px; left: 10px; font-size: 9.5px; letter-spacing: 2px; color: var(--dim2);
+    pointer-events: none;
+  }
+  #npArtLive {
+    position: absolute; top: 8px; right: 10px; font-size: 9.5px; letter-spacing: 1px; color: var(--green);
+    display: none; align-items: center; gap: 5px; pointer-events: none;
+  }
+  #npArtLive.show { display: flex; }
+  #npArtLive .reddot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  #npTitle { font-size: 19px; color: var(--white); margin-bottom: 6px; padding: 0 10px; }
+  #npArtist { font-size: 14px; color: var(--purple); margin-bottom: 4px; }
+  #npAlbum { font-size: 12px; color: var(--dim2); margin-bottom: 22px; }
+  #npStatusLive { font-size: 11px; color: var(--green); letter-spacing: 2px; margin-bottom: 22px; display: none; }
+
+  #npProgress { width: 100%; max-width: 340px; margin-bottom: 6px; }
+  #npBar { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; position: relative; }
+  #npBarFill { height: 100%; background: var(--red); border-radius: 2px; width: 0%; }
+  #npTimes { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim2); width: 100%; max-width: 340px; margin-top: 6px; margin-bottom: 22px; }
+
+  #npControls { display: flex; align-items: center; justify-content: center; gap: 28px; margin-bottom: 22px; }
+  .np-btn { background: none; border: none; color: var(--white); display: flex; align-items: center; justify-content: center; padding: 10px; }
+  .np-btn:active { opacity: 0.5; }
+  #npPlayBtn {
+    width: 62px; height: 62px; border-radius: 50%; border: 1.5px solid var(--white);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #npPlayBtn:active { border-color: var(--red); }
+  #npPlayBtn svg { color: var(--white); }
+
+  #npVolWrap { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 300px; }
+  #npVolSlider { flex: 1; accent-color: var(--purple); height: 22px; }
+
+  #npEmpty { padding: 70px 30px; text-align: center; color: var(--dim); }
+  #npEmpty .accent { color: var(--purple); }
+
+  /* ---------- Mini player (persistent, above bottom nav) ---------- */
+  #miniplayer {
+    display: none; align-items: center; gap: 10px; padding: 8px 12px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background: rgba(255,255,255,0.02); flex-shrink: 0;
+  }
+  #miniplayer.show { display: flex; }
+  #miniIco { width: 34px; height: 34px; border-radius: 6px; background: rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; color: var(--dim); flex-shrink: 0; }
+  #miniText { flex: 1; min-width: 0; }
+  #miniTitle { font-size: 12.5px; color: var(--white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #miniArtist { font-size: 11px; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #miniPlayBtn { background: none; border: 1px solid var(--line); color: var(--white); border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #miniNextBtn { background: none; border: none; color: var(--dim); flex-shrink: 0; padding: 8px; }
+  #miniProgressTrack { position: absolute; bottom: 0; left: 0; height: 2px; background: rgba(255,255,255,0.08); width: 100%; }
+  #miniProgressFill { height: 100%; background: var(--red); width: 0%; }
+
+  /* ---------- Bottom nav ---------- */
+  #bottomnav {
+    display: flex; border-top: 1px solid var(--line); flex-shrink: 0;
+    padding-bottom: var(--safe-bottom); background: var(--black);
+  }
+  .navbtn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 9px 4px 8px; background: none; border: none; color: var(--dim2); font-size: 9.5px; letter-spacing: 0.5px;
+  }
+  .navbtn.active { color: var(--red); }
+  .navbtn svg { width: 20px; height: 20px; }
+  .navbtn .navdot { width: 3px; height: 3px; border-radius: 50%; background: var(--red); opacity: 0; margin-top: -2px; }
+  .navbtn.active .navdot { opacity: 1; }
+
+  /* ---------- Terminal view ---------- */
+  #terminalView { display: flex; flex-direction: column; height: 100%; }
+  #termLog { flex: 1; overflow-y: auto; padding: 12px 14px; font-size: 12px; line-height: 1.6; -webkit-overflow-scrolling: touch; }
+  #termLog .ln { white-space: pre-wrap; word-break: break-word; }
+  .ln-cmd { color: var(--white); }
+  .ln-err { color: var(--red); }
+  .ln-ok { color: var(--green); }
+  .ln-hint { color: var(--purple); }
+  .ln-boot { color: var(--dim2); }
+  .ln-out { color: var(--dim); }
+  #termInputWrap {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    padding-bottom: calc(10px + var(--safe-bottom)); border-top: 1px solid var(--line); flex-shrink: 0;
+  }
+  #termPrompt { color: var(--green); font-size: 13px; }
+  #termInput {
+    flex: 1; background: transparent; border: none; color: var(--white); font-size: 14px;
+    font-family: inherit; outline: none;
+  }
+  #termInput::placeholder { color: var(--dim2); }
+  #termHelpBtn { color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 11px; background: none; flex-shrink: 0; }
+
+  /* quick command chips above keyboard */
+  #quickCmds { display: flex; gap: 6px; padding: 8px 14px 0; overflow-x: auto; }
+  #quickCmds::-webkit-scrollbar { display: none; }
+  .qcmd { flex-shrink: 0; font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 14px; padding: 6px 11px; background: none; }
+  .qcmd:active { border-color: var(--purple); color: var(--purple); }
+
+  /* ---------- Connect view (sources detail) ---------- */
+  .source-card {
+    margin: 10px 14px; padding: 16px; border: 1px solid var(--line); border-radius: 10px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .source-card .sc-icon { color: var(--dim); flex-shrink: 0; margin-top: 2px; }
+  .source-card .sc-body { flex: 1; min-width: 0; }
+  .source-card .sc-title { font-size: 14.5px; color: var(--white); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .source-card .sc-status { font-size: 10.5px; letter-spacing: 1px; padding: 2px 7px; border-radius: 10px; }
+  .sc-status.connected { color: var(--green); border: 1px solid rgba(57,255,106,0.4); }
+  .sc-status.notconnected { color: var(--dim2); border: 1px solid var(--line); }
+  .source-card .sc-desc { font-size: 12px; color: var(--dim); line-height: 1.5; margin-bottom: 10px; }
+  .source-card .sc-btn { font-size: 12px; color: var(--purple); border: 1px solid rgba(162,89,255,0.4); border-radius: 6px; padding: 8px 12px; background: none; }
+  .source-card .sc-btn:active { background: rgba(162,89,255,0.1); }
+  .source-card.is-active { border-color: var(--red); }
+
+  /* toast / error */
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + var(--safe-bottom));
+    background: #0a0a0a; border: 1px solid var(--red); color: var(--red); font-size: 12px;
+    padding: 10px 14px; border-radius: 8px; display: none; align-items: center; gap: 10px; max-width: 88vw; z-index: 50;
+  }
+  #toast.show { display: flex; }
+  #toast button { color: var(--red); background: none; border: none; font-size: 14px; }
+
+  /* drag overlay (desktop convenience) */
+  #dragOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); border: 3px dashed var(--green);
+    display: none; align-items: center; justify-content: center; color: var(--green); text-align: center; padding: 30px; z-index: 100;
+  }
+  #dragOverlay.show { display: flex; }
+
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="brand"><span class="dot">â</span>TERMPLAY</div>
+    <div class="lamps"><span class="l1"></span><span class="l2"></span><span class="l3"></span></div>
+  </div>
+
+  <!-- MAIN VIEWS -->
+  <div id="main">
+
+    <!-- BROWSE VIEW -->
+    <div class="view active" id="view-browse">
+      <div id="sourceChips"></div>
+      <div id="radioSubnav"></div>
+      <div id="searchWrap">
+        <input id="searchInput" placeholder="search this source..." autocomplete="off" autocorrect="off" spellcheck="false" />
+        <button id="searchClear">â</button>
+      </div>
+      <div id="pickerPanel"></div>
+      <div id="localImportBar"></div>
+      <div id="serverConnectPanel"></div>
+      <div id="serverBreadcrumb"></div>
+      <div class="section-label"><span id="listLabel">/DEV/RADIO</span><span id="listCount">0 items</span></div>
+      <div id="listContainer"></div>
+    </div>
+
+    <!-- NOW PLAYING VIEW -->
+    <div class="view" id="view-nowplaying">
+      <div id="npEmpty">
+        <div class="big-icon">âª</div>
+        <div>nothing loaded yet.</div>
+        <div class="hint">go to <span class="accent">Browse</span>, pick a source, and tap any track or station to start playback.</div>
+      </div>
+      <div id="nowplayingView" style="display:none;">
+        <div id="npArt">
+          <canvas id="npCanvas"></canvas>
+          <span id="npArtLabel">SPECTRUM</span>
+          <span id="npArtLive"><span class="reddot"></span>LIVE</span>
+        </div>
+        <div id="npTitle">â</div>
+        <div id="npArtist">â</div>
+        <div id="npAlbum"></div>
+        <div id="npStatusLive">â LIVE STREAM</div>
+        <div id="npProgress">
+          <div id="npBar"><div id="npBarFill"></div></div>
+          <div id="npTimes"><span id="npCur">0:00</span><span id="npDur">0:00</span></div>
+        </div>
+        <div id="npControls">
+          <button class="np-btn" id="npPrev">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <button id="npPlayBtn">
+            <svg id="npPlayIcon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="np-btn" id="npNext">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+          </button>
+        </div>
+        <div id="npVolWrap">
+          <button class="np-btn" id="npMuteBtn" style="padding:4px;">
+            <svg id="npVolIcon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12z"/></svg>
+          </button>
+          <input type="range" id="npVolSlider" min="0" max="100" value="70" />
+        </div>
+      </div>
+    </div>
+
+    <!-- SOURCES / CONNECT VIEW -->
+    <div class="view" id="view-sources">
+      <div class="section-label"><span>SOURCES</span><span></span></div>
+      <div id="sourcesList"></div>
+    </div>
+
+    <!-- TERMINAL VIEW -->
+    <div class="view" id="view-terminal">
+      <div id="terminalView">
+        <div id="termLog"></div>
+        <div id="quickCmds">
+          <button class="qcmd" data-cmd="list">list</button>
+          <button class="qcmd" data-cmd="help">help</button>
+          <button class="qcmd" data-cmd="diag">diag</button>
+          <button class="qcmd" data-cmd="import">import</button>
+          <button class="qcmd" data-cmd="queue">queue</button>
+          <button class="qcmd" data-cmd="next">next</button>
+          <button class="qcmd" data-cmd="prev">prev</button>
+          <button class="qcmd" data-cmd="clear">clear</button>
+        </div>
+        <div id="termInputWrap">
+          <span id="termPrompt">$</span>
+          <input id="termInput" placeholder="type a commandâ¦" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <button id="termHelpBtn">?</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MINI PLAYER -->
+  <div id="miniplayer">
+    <div id="miniProgressTrack"><div id="miniProgressFill"></div></div>
+    <div id="miniIco">âª</div>
+    <div id="miniText">
+      <div id="miniTitle">â</div>
+      <div id="miniArtist">â</div>
+    </div>
+    <button id="miniPlayBtn">
+      <svg id="miniPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button id="miniNextBtn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+    </button>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div id="bottomnav">
+    <button class="navbtn active" data-view="browse">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>BROWSE</span><span class="navdot"></span>
+    </button>
+    <button class="navbtn" data-view="nowplaying">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span>PLAYING</span><span class="navdot"></span>
+    </button>
+    <button class="navbtn" data-view="sources">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/></svg>
+      <span>SOURCES</span><span class="navdot"></span>
+    </button>
+    <button class="navbtn" data-view="terminal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span>TERM</span><span class="navdot"></span>
+    </button>
+  </div>
+
+</div>
+
+<input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.wma,.aiff,.aif" multiple />
+<div id="toast"><span id="toastMsg"></span><button id="toastClose">â</button></div>
+<div id="dragOverlay">drop audio files anywhere to import into /dev/local</div>
+<audio id="audio"></audio>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // DATA
+  // ---------------------------------------------------------------------
+  // Small offline fallback, used only if the live Radio Browser directory
+  // can't be reached (e.g. no network, or the API host is blocked).
+  const FALLBACK_STATIONS = [
+    { id:"r1", name:"NTS Radio 1", genre:"eclectic", url:"https://stream-relay-geo.ntslive.net/stream", country:"UK" },
+    { id:"r2", name:"SomaFM Groove Salad", genre:"ambient/downtempo", url:"https://ice1.somafm.com/groovesalad-128-mp3", country:"US" },
+    { id:"r3", name:"SomaFM Drone Zone", genre:"ambient", url:"https://ice1.somafm.com/dronezone-128-mp3", country:"US" },
+    { id:"r4", name:"SomaFM Beat Blender", genre:"downtempo/house", url:"https://ice1.somafm.com/beatblender-128-mp3", country:"US" },
+    { id:"r5", name:"SomaFM Deep Space One", genre:"ambient/space", url:"https://ice1.somafm.com/deepspaceone-128-mp3", country:"US" },
+    { id:"r6", name:"SomaFM Lush", genre:"vocal/chill", url:"https://ice1.somafm.com/lush-128-mp3", country:"US" },
+    { id:"r7", name:"SomaFM Indie Pop Rocks", genre:"indie", url:"https://ice1.somafm.com/indiepop-128-mp3", country:"US" },
+    { id:"r8", name:"SomaFM Secret Agent", genre:"spy lounge", url:"https://ice1.somafm.com/secretagent-128-mp3", country:"US" },
+    { id:"r9", name:"Radio Paradise Main", genre:"eclectic rock", url:"https://stream.radioparadise.com/mp3-192", country:"US" },
+    { id:"r10", name:"Radio Paradise Mellow", genre:"mellow mix", url:"https://stream.radioparadise.com/mellow-192", country:"US" },
+    { id:"r11", name:"Radio Paradise Rock", genre:"rock mix", url:"https://stream.radioparadise.com/rock-192", country:"US" },
+    { id:"r12", name:"KEXP Seattle", genre:"alternative", url:"https://kexp.streamguys1.com/kexp160.aac", country:"US" },
+    { id:"r13", name:"FIP Radio", genre:"eclectic/jazz", url:"https://icecast.radiofrance.fr/fip-midfi.mp3", country:"FR" },
+    { id:"r14", name:"FIP Groove", genre:"groove/funk", url:"https://icecast.radiofrance.fr/fipgroove-midfi.mp3", country:"FR" },
+    { id:"r15", name:"Jazz24", genre:"jazz", url:"https://live.wostreaming.net/direct/ppm-jazz24mp3-ibc1", country:"US" },
+    { id:"r16", name:"Radio Swiss Jazz", genre:"jazz", url:"https://stream.srg-ssr.ch/m/rsj/mp3_128", country:"CH" },
+    { id:"r17", name:"Radio Swiss Classic", genre:"classical", url:"https://stream.srg-ssr.ch/m/rsc_de/mp3_128", country:"CH" },
+    { id:"r18", name:"WWOZ New Orleans", genre:"jazz/blues/roots", url:"https://wwoz-sc.streamguys1.com/wwoz-hi.mp3", country:"US" },
+    { id:"r19", name:"SomaFM Space Station", genre:"space music", url:"https://ice1.somafm.com/spacestation-128-mp3", country:"US" },
+    { id:"r20", name:"SomaFM Underground 80s", genre:"80s underground", url:"https://ice1.somafm.com/u80s-128-mp3", country:"US" }
+  ];
+
+  // ---------------------------------------------------------------------
+  // RADIO BROWSER â open, free, no-key API with 50,000+ live worldwide
+  // stations. https://api.radio-browser.info
+  // ---------------------------------------------------------------------
+  const RadioBrowser = (function(){
+    const MIRRORS = [
+      "https://de1.api.radio-browser.info",
+      "https://nl1.api.radio-browser.info",
+      "https://at1.api.radio-browser.info"
+    ];
+    let baseUrl = null;
+    let resolving = null;
+
+    async function resolveBase(){
+      if (baseUrl) return baseUrl;
+      if (resolving) return resolving;
+      resolving = (async () => {
+        for (const m of MIRRORS){
+          try {
+            const res = await fetch(m + "/json/stats", { cache: "no-store" });
+            if (res.ok){ baseUrl = m; return m; }
+          } catch(e) { /* try next mirror */ }
+        }
+        throw new Error("no reachable Radio Browser mirror");
+      })();
+      return resolving;
+    }
+
+    function toTrack(s){
+      const rawUrl = s.url_resolved || s.url || "";
+      const isHttp = rawUrl.startsWith("http://");
+      const pageIsHttps = typeof location !== "undefined" && location.protocol === "https:";
+      return {
+        id: "rb_" + s.stationuuid,
+        stationuuid: s.stationuuid,
+        title: s.name ? s.name.trim() : "Untitled Station",
+        artist: (s.tags ? s.tags.split(",")[0] : "") || s.countrycode || "radio",
+        album: s.country || s.countrycode || "",
+        url: rawUrl,
+        isStream: true,
+        type: "radio",
+        codec: s.codec,
+        bitrate: s.bitrate,
+        favicon: s.favicon,
+        // Browsers silently block loading http:// media from an https:// page
+        // (mixed content). Flag it up front so the UI can warn instead of
+        // just doing nothing when tapped.
+        blockedByMixedContent: isHttp && pageIsHttps
+      };
+    }
+
+    async function request(path, params){
+      const base = await resolveBase();
+      const qs = new URLSearchParams(Object.assign({ hidebroken: "true", order: "clickcount", reverse: "true" }, params || {}));
+      const res = await fetch(base + path + "?" + qs.toString(), {
+        headers: { "User-Agent": "TermPlay/1.0" }
+      });
+      if (!res.ok) throw new Error("Radio Browser request failed: " + res.status);
+      return res.json();
+    }
+
+    // Put playable (https, or page isn't https) stations first so users
+    // don't land on a row that silently can't play due to mixed content.
+    function sortPlayableFirst(tracks){
+      return tracks.slice().sort((a, b) => (a.blockedByMixedContent === b.blockedByMixedContent) ? 0 : (a.blockedByMixedContent ? 1 : -1));
+    }
+
+    return {
+      async top(limit){
+        const rows = await request("/json/stations/topclick/" + (limit || 50));
+        return sortPlayableFirst(rows.map(toTrack));
+      },
+      async search(query, limit){
+        const rows = await request("/json/stations/search", { name: query, limit: limit || 60 });
+        return sortPlayableFirst(rows.map(toTrack));
+      },
+      async byCountry(country, limit){
+        const rows = await request("/json/stations/search", { country, limit: limit || 60 });
+        return sortPlayableFirst(rows.map(toTrack));
+      },
+      async byTag(tag, limit){
+        const rows = await request("/json/stations/search", { tag, limit: limit || 60 });
+        return sortPlayableFirst(rows.map(toTrack));
+      },
+      async countries(){
+        const rows = await request("/json/countries", { order: "name", reverse: "false" });
+        return rows
+          .filter(c => c.name && parseInt(c.stationcount,10) > 4)
+          .sort((a,b)=> parseInt(b.stationcount,10) - parseInt(a.stationcount,10));
+      },
+      async tags(){
+        const rows = await request("/json/tags", { order: "stationcount", reverse: "true", limit: 60 });
+        return rows.filter(t => t.name && t.name.trim().length > 1);
+      },
+      async registerClick(stationuuid){
+        try {
+          const base = await resolveBase();
+          await fetch(base + "/json/url/" + stationuuid);
+        } catch(e) { /* non-critical, ignore */ }
+      }
+    };
+  })();
+
+  // ---------------------------------------------------------------------
+  // HOME SERVER â talks to a self-hosted music_server.py instance (Flask,
+  // running on Termux + Tailscale or any reachable host). API shape:
+  //   GET /ping                 -> {ok:true}
+  //   GET /library              -> {artists:[{name, albums:[{name, songs:[...], art, path, category?}], songs:[...]}]}
+  //   GET /file/<path>          -> audio stream (range-request capable)
+  //   GET /art/<path>           -> album art image
+  //
+  // The server's folder scanner supports THREE layouts under each artist
+  // folder, and reports them all identically in `albums[]` â the frontend
+  // never needs to know which layout a given album came from:
+  //   artist/album/song                  -> album.category is absent
+  //   artist/2020/album/song             -> album.category = "2020"
+  //   artist/EP/album/song (EP/Single/â¦) -> album.category = "EP"
+  // `album.path` is always the real relative path to the album's folder
+  // regardless of layout, so file/art URLs are built the same way either way.
+  // ---------------------------------------------------------------------
+  const HomeServer = (function(){
+    function normalizeBase(url){
+      let u = (url || "").trim();
+      if (!u) return "";
+      if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+      return u.replace(/\/+$/, ""); // strip trailing slashes
+    }
+
+    function encodePath(relPath){
+      // encode each segment individually so slashes are preserved
+      return relPath.split("/").map(encodeURIComponent).join("/");
+    }
+    function fileUrl(base, relPath){ return base + "/file/" + encodePath(relPath); }
+    function artUrl(base, relPath){ return base + "/art/" + encodePath(relPath); }
+
+    async function ping(base){
+      const res = await fetch(base + "/ping", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (!data || data.ok !== true) throw new Error("unexpected response from /ping");
+      return true;
+    }
+
+    async function fetchLibrary(base){
+      const res = await fetch(base + "/library", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data; // {artists:[...]}
+    }
+
+    // A display label for an album row that surfaces its category
+    // (year/EP/Single/Live/etc.) when the server reported one, so albums
+    // that share a name under different categories stay distinguishable.
+    function albumDisplayName(album){
+      return album.category ? album.name + "  Â·  " + album.category : album.name;
+    }
+
+    // Flatten one album's songs into playable track objects.
+    // album.path is the REAL folder path regardless of whether it sat
+    // directly under the artist or one level deeper under a category folder.
+    function albumToTracks(base, artistName, album){
+      const dirPath = album.path;
+      return album.songs.map(function(songFile){
+        return {
+          id: "hs_" + dirPath + "/" + songFile,
+          title: songFile.replace(/\.[^/.]+$/, ""),
+          artist: artistName,
+          album: albumDisplayName(album),
+          url: fileUrl(base, dirPath + "/" + songFile),
+          art: album.art ? artUrl(base, album.art) : null,
+          isStream: false,
+          type: "homeserver"
+        };
+      });
+    }
+
+    // Flatten an artist's standalone (non-album) songs â these sit as bare
+    // audio files directly inside the artist's own folder.
+    function standaloneToTracks(base, artistName, songFiles){
+      return songFiles.map(function(songFile){
+        return {
+          id: "hs_" + artistName + "/" + songFile,
+          title: songFile.replace(/\.[^/.]+$/, ""),
+          artist: artistName,
+          album: "",
+          url: fileUrl(base, artistName + "/" + songFile),
+          art: null,
+          isStream: false,
+          type: "homeserver"
+        };
+      });
+    }
+
+    return {
+      normalizeBase: normalizeBase,
+      ping: ping,
+      fetchLibrary: fetchLibrary,
+      albumToTracks: albumToTracks,
+      standaloneToTracks: standaloneToTracks,
+      albumDisplayName: albumDisplayName,
+      artUrl: artUrl
+    };
+  })();
+
+  const SOURCE_ICONS = {
+    local: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/></svg>',
+    radio: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="14" r="3"/><path d="M4 8.5A9 9 0 0 1 12 4a9 9 0 0 1 8 4.5M7 11a5 5 0 0 1 10 0"/></svg>',
+    ytmusic: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16" fill="currentColor" stroke="none"/></svg>',
+    spotify: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 15c3-1 6-1 9 1M7.5 12c3.5-1.3 7-1 10 1M7 9c4-1.5 8-1 11 1.2"/></svg>',
+    bandcamp: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l6-9h12l-6 9z"/></svg>',
+    drive: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2 2 12l4 8h12l4-8-6-10z"/><path d="M2 12h20"/></svg>',
+    homeserver: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/></svg>'
+  };
+
+  const SOURCES = [
+    { id:"local", label:"Local Files", connected:true, desc:"Import audio files from your device or drag & drop them here. Playback is fully local â nothing leaves your phone." },
+    { id:"homeserver", label:"Home Server", connected:false, desc:"Stream from your own music library over Tailscale â point this at your Termux server's URL. Nothing leaves your network." },
+    { id:"radio", label:"Internet Radio", connected:true, desc:"50,000+ live stations worldwide via the open Radio Browser directory â browse by country or genre, or search by name, just like TuneIn." },
+    { id:"ytmusic", label:"YouTube Music", connected:false, desc:"Needs Google OAuth plus a server-side proxy to call the YouTube Music API. A browser-only app can't hold that secret safely." },
+    { id:"spotify", label:"Spotify", connected:false, desc:"Needs Spotify OAuth (PKCE) and, for full-track audio, the official Spotify Web Playback SDK running with a Premium account." },
+    { id:"bandcamp", label:"Bandcamp", connected:false, desc:"Bandcamp has no public streaming API â a real integration would need a licensed backend or embed player per release." },
+    { id:"drive", label:"Google Drive", connected:false, desc:"Needs Google OAuth (drive.readonly scope) to list and stream your uploaded audio files via the Drive API." }
+  ];
+
+  const HELP_TEXT = [
+    "AVAILABLE COMMANDS",
+    "  help                 show this message",
+    "  play <n>             play item n from current list",
+    "  pause / resume       control playback",
+    "  stop                 stop and reset",
+    "  next / prev          skip tracks",
+    "  vol <0-100>          set volume",
+    "  source <name>        local / radio / ytmusic / spotify / bandcamp / drive",
+    "  list                 list current source contents",
+    "  search <query>       search current source (radio searches live, worldwide)",
+    "  country <name>       browse radio stations by country",
+    "  genre <name>         browse radio stations by genre/tag",
+    "  top                  show top 50 most-listened radio stations",
+    "  connect <name>       connect an account-based source",
+    "  queue                show current queue",
+    "  import               open your phone/computer's file picker",
+    "  diag                 run diagnostics (network, file, audio support)",
+    "  clear                clear the terminal"
+  ];
+
+  const BOOT_LINES = [
+    "TERMPLAY OS v2.2.0 â booting audio subsystem...",
+    "mounting /dev/local...       [ OK ]",
+    "mounting /dev/radio...       [ OK ]",
+    "mounting /dev/ytmusic...     [ NOT CONNECTED ]",
+    "mounting /dev/spotify...     [ NOT CONNECTED ]",
+    "mounting /dev/bandcamp...    [ NOT CONNECTED ]",
+    "mounting /dev/drive...       [ NOT CONNECTED ]",
+    "type 'help' for a list of commands.",
+    ""
+  ];
+
+  // ---------------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------------
+  const state = {
+    source: "radio",
+    localTracks: [],
+    queue: [],
+    current: null,
+    isPlaying: false,
+    loading: false,
+    volume: 70,
+    muted: false,
+    progress: 0,
+    duration: 0,
+    searchQuery: "",
+    activeView: "browse",
+    // radio browsing sub-state
+    radioMode: "top",       // top | country | genre | search
+    radioList: [],          // currently loaded radio results
+    radioLoading: false,
+    radioError: false,
+    radioLabel: "Top Stations Worldwide",
+    countryList: [],        // cached country index
+    tagList: [],            // cached genre/tag index
+    countriesLoaded: false,
+    tagsLoaded: false,
+    // home server sub-state
+    serverUrl: "",          // e.g. https://tablet.tailXXXX.ts.net:8765
+    serverConnected: false,
+    serverConnecting: false,
+    serverError: "",
+    serverLibrary: null,    // raw {artists:[...]} from /library
+    serverPath: [],         // breadcrumb stack: [] | [{type:'artist',name,idx}] | [...,{type:'album',name,idx}]
+    serverList: []          // currently displayed list (mix of nav rows and/or tracks)
+  };
+
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function fmtTime(s){
+    if (!isFinite(s) || s < 0) return "--:--";
+    const m = Math.floor(s/60), sec = Math.floor(s%60);
+    return m + ":" + String(sec).padStart(2,"0");
+  }
+  function fallbackStationToTrack(s){
+    return { id:s.id, title:s.name, artist:s.genre, album:s.country, url:s.url, isStream:true, type:"radio" };
+  }
+  function activeList(){
+    if (state.source === "radio") return state.radioList;
+    if (state.source === "local") return state.localTracks;
+    if (state.source === "homeserver") return state.serverList;
+    return [];
+  }
+
+  // ---- Radio Browser loading orchestration ------------------------------
+  let radioLoadToken = 0;
+  async function loadRadio(mode, label, fetcher){
+    const myToken = ++radioLoadToken;
+    state.radioMode = mode;
+    state.radioLabel = label;
+    state.radioLoading = true;
+    state.radioError = false;
+    if (state.source === "radio"){ renderRadioSubnav(); renderList(); }
+    try {
+      const results = await fetcher();
+      if (myToken !== radioLoadToken) return; // a newer request superseded this one
+      state.radioList = results;
+      state.radioLoading = false;
+      if (state.source === "radio") renderList();
+    } catch(e){
+      if (myToken !== radioLoadToken) return;
+      state.radioLoading = false;
+      state.radioError = true;
+      state.radioList = FALLBACK_STATIONS.map(fallbackStationToTrack);
+      showToast("Couldn't reach the live radio directory â showing a small offline station list instead.");
+      if (state.source === "radio") renderList();
+    }
+  }
+  function loadTopStations(){
+    loadRadio("top", "Top Stations Worldwide", () => RadioBrowser.top(50));
+  }
+  function loadRadioSearch(q){
+    loadRadio("search", 'Search results for "' + q + '"', () => RadioBrowser.search(q, 60));
+  }
+  function loadRadioCountry(country){
+    loadRadio("country", "Radio Â· " + country, () => RadioBrowser.byCountry(country, 80));
+  }
+  function loadRadioGenre(tag){
+    loadRadio("genre", "Genre Â· " + tag, () => RadioBrowser.byTag(tag, 80));
+  }
+
+  // ---- Home Server browsing orchestration -------------------------------
+  // state.serverPath breadcrumb stack describes where we are:
+  //   []                                       -> artist list
+  //   [{type:'artist', name, idx}]             -> that artist's albums (however nested on disk) + standalone songs
+  //   [...,{type:'album', name, idx}]          -> that album's song list (playable)
+  // Note: album.idx below always indexes into artist.albums â the SAME flat
+  // array the server already produced regardless of whether that album lived
+  // directly under the artist folder, under a year folder, or under a
+  // category folder (EP/Single/Live/etc). The frontend never walks the disk
+  // layout itself; it only ever trusts album.path (the real relative path)
+  // and album.category (a label, if any) exactly as the server reported them.
+  const SERVER_URL_KEY = "termplay_home_server_url";
+
+  function saveServerUrl(url){
+    try { localStorage.setItem(SERVER_URL_KEY, url); } catch(e){ /* storage may be unavailable; non-fatal */ }
+  }
+  function loadSavedServerUrl(){
+    try { return localStorage.getItem(SERVER_URL_KEY) || ""; } catch(e){ return ""; }
+  }
+
+  async function connectHomeServer(rawUrl){
+    const base = HomeServer.normalizeBase(rawUrl);
+    if (!base){ showToast("Enter your server's URL first."); return; }
+    state.serverConnecting = true;
+    state.serverError = "";
+    renderServerConnectPanel();
+    renderList();
+    try {
+      await HomeServer.ping(base);
+      const library = await HomeServer.fetchLibrary(base);
+      state.serverUrl = base;
+      state.serverLibrary = library;
+      state.serverConnected = true;
+      state.serverConnecting = false;
+      state.serverError = "";
+      saveServerUrl(base);
+      SOURCES.find(s=>s.id==="homeserver").connected = true;
+      showToast("Connected to home server â " + (library.artists ? library.artists.length : 0) + " artist(s) found.");
+      termPrint("home server connected: " + base, "ok");
+      showServerArtists();
+      renderServerConnectPanel();
+    } catch(e){
+      state.serverConnecting = false;
+      state.serverConnected = false;
+      state.serverError = describeServerError(e, base);
+      termPrint("home server connection failed: " + state.serverError, "err");
+      renderServerConnectPanel();
+      renderList();
+    }
+  }
+
+  function describeServerError(e, base){
+    const msg = (e && e.message) || String(e);
+    if (base.startsWith("http://") && location.protocol === "https:"){
+      return "this page is HTTPS but your server URL is plain HTTP â browsers block that. Use the server's https:// URL instead (music_server.py already serves TLS on port 8765).";
+    }
+    if (msg.includes("Failed to fetch") || msg.includes("NetworkError")){
+      return "couldn't reach that address â check the server is running, Tailscale is connected on both devices, and the URL/port are correct.";
+    }
+    if (msg.startsWith("HTTP ")){
+      return "server responded with " + msg + " â check the URL is correct.";
+    }
+    return msg;
+  }
+
+  function disconnectHomeServer(){
+    state.serverConnected = false;
+    state.serverLibrary = null;
+    state.serverList = [];
+    state.serverPath = [];
+    SOURCES.find(s=>s.id==="homeserver").connected = false;
+    termPrint("home server disconnected.", "out");
+    renderServerConnectPanel();
+    if (state.source === "homeserver") renderList();
+  }
+
+  function showServerArtists(){
+    state.serverPath = [];
+    const artists = (state.serverLibrary && state.serverLibrary.artists) || [];
+    state.serverList = artists.map(function(artist, idx){
+      const albumCount = artist.albums ? artist.albums.length : 0;
+      const singleCount = artist.songs ? artist.songs.length : 0;
+      return {
+        isNav: true,
+        navType: "artist",
+        idx: idx,
+        title: artist.name,
+        artist: albumCount + " album" + (albumCount===1?"":"s") + (singleCount ? " Â· " + singleCount + " single(s)" : ""),
+        album: ""
+      };
+    });
+    renderServerBreadcrumb();
+    renderList();
+  }
+
+  function showServerArtist(idx){
+    const artist = state.serverLibrary.artists[idx];
+    if (!artist) return;
+    state.serverPath = [{ type:"artist", name: artist.name, idx: idx }];
+    const items = [];
+    artist.albums.forEach(function(album, aIdx){
+      items.push({
+        isNav: true,
+        navType: "album",
+        idx: aIdx,
+        title: HomeServer.albumDisplayName(album),
+        artist: album.songs.length + " track" + (album.songs.length===1?"":"s"),
+        album: artist.name
+      });
+    });
+    if (artist.songs && artist.songs.length){
+      items.push.apply(items, HomeServer.standaloneToTracks(state.serverUrl, artist.name, artist.songs));
+    }
+    state.serverList = items;
+    renderServerBreadcrumb();
+    renderList();
+  }
+
+  function showServerAlbum(albumIdx){
+    const artistEntry = state.serverPath[0];
+    const artist = state.serverLibrary.artists[artistEntry.idx];
+    const album = artist.albums[albumIdx];
+    if (!album) return;
+    state.serverPath = [artistEntry, { type:"album", name: HomeServer.albumDisplayName(album), idx: albumIdx }];
+    state.serverList = HomeServer.albumToTracks(state.serverUrl, artist.name, album);
+    renderServerBreadcrumb();
+    renderList();
+  }
+
+  function serverGoBack(){
+    if (state.serverPath.length === 0) return;
+    if (state.serverPath.length === 1){
+      showServerArtists();
+    } else {
+      showServerArtist(state.serverPath[0].idx);
+    }
+  }
+
+  function serverBreadcrumbLabel(){
+    if (state.serverPath.length === 0) return "Home Server Â· Artists";
+    if (state.serverPath.length === 1) return "Home Server Â· " + state.serverPath[0].name;
+    return "Home Server Â· " + state.serverPath[0].name + " Â· " + state.serverPath[1].name;
+  }
+
+  // Returns true if the tap was on a nav row (artist/album) and has been
+  // handled by drilling in; false means the caller should play it as a track.
+  function handleServerRowTap(item){
+    if (item.isNav && item.navType === "artist"){ showServerArtist(item.idx); return true; }
+    if (item.isNav && item.navType === "album"){ showServerAlbum(item.idx); return true; }
+    return false;
+  }
+
+  // ---------------------------------------------------------------------
+  // DOM REFS
+  // ---------------------------------------------------------------------
+  const audio = document.getElementById("audio");
+  const el = {
+    sourceChips: document.getElementById("sourceChips"),
+    searchInput: document.getElementById("searchInput"),
+    searchClear: document.getElementById("searchClear"),
+    listLabel: document.getElementById("listLabel"),
+    listCount: document.getElementById("listCount"),
+    listContainer: document.getElementById("listContainer"),
+    npEmpty: document.getElementById("npEmpty"),
+    npView: document.getElementById("nowplayingView"),
+    npArt: document.getElementById("npArt"),
+    npCanvas: document.getElementById("npCanvas"),
+    npArtLive: document.getElementById("npArtLive"),
+    npTitle: document.getElementById("npTitle"),
+    npArtist: document.getElementById("npArtist"),
+    npAlbum: document.getElementById("npAlbum"),
+    npStatusLive: document.getElementById("npStatusLive"),
+    npBarFill: document.getElementById("npBarFill"),
+    npBar: document.getElementById("npBar"),
+    npCur: document.getElementById("npCur"),
+    npDur: document.getElementById("npDur"),
+    npPlayBtn: document.getElementById("npPlayBtn"),
+    npPlayIcon: document.getElementById("npPlayIcon"),
+    npPrev: document.getElementById("npPrev"),
+    npNext: document.getElementById("npNext"),
+    npVolSlider: document.getElementById("npVolSlider"),
+    npMuteBtn: document.getElementById("npMuteBtn"),
+    npVolIcon: document.getElementById("npVolIcon"),
+    sourcesList: document.getElementById("sourcesList"),
+    termLog: document.getElementById("termLog"),
+    termInput: document.getElementById("termInput"),
+    termHelpBtn: document.getElementById("termHelpBtn"),
+    quickCmds: document.getElementById("quickCmds"),
+    miniplayer: document.getElementById("miniplayer"),
+    miniTitle: document.getElementById("miniTitle"),
+    miniArtist: document.getElementById("miniArtist"),
+    miniPlayBtn: document.getElementById("miniPlayBtn"),
+    miniPlayIcon: document.getElementById("miniPlayIcon"),
+    miniNextBtn: document.getElementById("miniNextBtn"),
+    miniProgressFill: document.getElementById("miniProgressFill"),
+    fileInput: document.getElementById("fileInput"),
+    toast: document.getElementById("toast"),
+    toastMsg: document.getElementById("toastMsg"),
+    toastClose: document.getElementById("toastClose"),
+    dragOverlay: document.getElementById("dragOverlay")
+  };
+
+  const PLAY_ICON = '<path d="M8 5v14l11-7z"/>';
+  const PAUSE_ICON = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+  const LOAD_ICON_CLASS = "spin";
+
+  // ---------------------------------------------------------------------
+  // TOAST
+  // ---------------------------------------------------------------------
+  let toastTimer = null;
+  function showToast(msg){
+    el.toastMsg.textContent = msg;
+    el.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> el.toast.classList.remove("show"), 5000);
+  }
+  el.toastClose.addEventListener("click", ()=> el.toast.classList.remove("show"));
+
+  // ---------------------------------------------------------------------
+  // TERMINAL
+  // ---------------------------------------------------------------------
+  function termPrint(text, kind){
+    kind = kind || "out";
+    const line = document.createElement("div");
+    line.className = "ln ln-" + kind;
+    line.textContent = text || "\u00A0";
+    el.termLog.appendChild(line);
+    el.termLog.scrollTop = el.termLog.scrollHeight;
+  }
+  function termPrintMulti(lines, kind){
+    lines.forEach(l => termPrint(l, kind));
+  }
+
+  const cmdHistory = [];
+  let histIdx = -1;
+
+  function runCommand(raw){
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    termPrint("> " + trimmed, "cmd");
+    cmdHistory.push(trimmed);
+    histIdx = -1;
+
+    const parts = trimmed.split(" ");
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(" ");
+
+    switch(cmd){
+      case "help":
+        termPrintMulti(HELP_TEXT);
+        break;
+      case "clear":
+        el.termLog.innerHTML = "";
+        break;
+      case "list": {
+        const list = activeList();
+        if (state.source === "radio" && state.radioLoading){ termPrint("loading stations...", "out"); break; }
+        if (!list.length){
+          termPrint("/dev/" + state.source + " is empty.", "err");
+          if (state.source === "local") termPrint("tip: use the IMPORT button or drag files onto the window.", "hint");
+          if (state.source === "radio") termPrint("tip: try 'top', 'country <name>', 'genre <name>', or 'search <query>'.", "hint");
+          if (state.source !== "local" && state.source !== "radio") termPrint("tip: run 'connect " + state.source + "' first.", "hint");
+          break;
+        }
+        if (state.source === "radio") termPrint(state.radioLabel + ":", "out");
+        termPrintMulti(list.map((t,i)=> "  [" + String(i+1).padStart(2,"0") + "] " + t.title + (t.artist ? "  Â·  " + t.artist : "")));
+        break;
+      }
+      case "play": {
+        const n = parseInt(arg,10);
+        if (!arg || isNaN(n)){ termPrint("usage: play <n>  (see 'list' for indices)", "err"); break; }
+        playIndex(n-1, activeList());
+        break;
+      }
+      case "pause":
+        audio.pause(); state.isPlaying=false; syncPlayButtons(); termPrint("paused.", "ok");
+        break;
+      case "resume":
+        audio.play().then(()=>{ state.isPlaying=true; syncPlayButtons(); }).catch(()=>{});
+        termPrint("resumed.", "ok");
+        break;
+      case "stop":
+        audio.pause(); audio.currentTime = 0; state.isPlaying=false; syncPlayButtons(); termPrint("stopped.", "ok");
+        break;
+      case "next":
+        handleNext(); termPrint("skipped to next.", "ok");
+        break;
+      case "prev":
+        handlePrev(); termPrint("went to previous.", "ok");
+        break;
+      case "vol": {
+        const v = parseInt(arg,10);
+        if (isNaN(v) || v<0 || v>100){ termPrint("usage: vol <0-100>", "err"); break; }
+        setVolume(v); termPrint("volume set to " + v + ".", "ok");
+        break;
+      }
+      case "source": {
+        const s = arg.toLowerCase();
+        const match = SOURCES.find(x=>x.id===s);
+        if (!match){ termPrint("unknown source '" + arg + "'. options: " + SOURCES.map(x=>x.id).join(", "), "err"); break; }
+        setSource(match.id);
+        termPrint("switched to /dev/" + match.id + ".", "ok");
+        if (!match.connected) termPrint("note: " + match.label + " is not connected yet â run 'connect " + match.id + "'.", "hint");
+        break;
+      }
+      case "connect": {
+        const argParts = arg.split(" ");
+        const sourceId = argParts[0].toLowerCase();
+        const match = SOURCES.find(x=>x.id===sourceId);
+        if (!match){ termPrint("unknown source '" + arg + "'.", "err"); break; }
+        if (match.connected){ termPrint(match.label + " is already connected.", "ok"); break; }
+        if (match.id === "homeserver"){
+          setSource("homeserver");
+          switchView("browse");
+          if (argParts.length > 1){
+            const url = argParts.slice(1).join(" ");
+            termPrint("connecting to " + url + "...", "out");
+            connectHomeServer(url);
+          } else {
+            termPrint("enter your server URL in the panel above (e.g. tablet.tailnet-name.ts.net:8765), or run: connect homeserver <url>", "hint");
+          }
+          break;
+        }
+        termPrint(match.label + " requires OAuth + a backend API key this environment can't hold securely.", "err");
+        termPrint("to wire this up for real: deploy a small backend for the " + match.label + " OAuth flow and API proxy, then point 'connect' at it.", "hint");
+        break;
+      }
+      case "search": {
+        if (!arg){ termPrint("usage: search <query>", "err"); break; }
+        if (state.source === "radio"){
+          setSource("radio", { skipAutoLoad: true });
+          setSearchQuery("");
+          termPrint('searching live directory for "' + arg + '"...', "out");
+          loadRadioSearch(arg);
+          switchView("browse");
+          break;
+        }
+        setSearchQuery(arg);
+        const list = activeList().filter(t => t.title.toLowerCase().includes(arg.toLowerCase()) || (t.artist||"").toLowerCase().includes(arg.toLowerCase()));
+        if (!list.length){ termPrint('no results for "' + arg + '" in /dev/' + state.source + ".", "err"); break; }
+        termPrintMulti(['results for "' + arg + '":'].concat(list.map((t,i)=> "  [" + String(i+1).padStart(2,"0") + "] " + t.title + "  Â·  " + t.artist)));
+        break;
+      }
+      case "country": {
+        if (!arg){ termPrint("usage: country <name>  e.g. 'country Japan'", "err"); break; }
+        setSource("radio", { skipAutoLoad: true });
+        termPrint("loading stations in " + arg + "...", "out");
+        loadRadioCountry(arg);
+        switchView("browse");
+        break;
+      }
+      case "genre": {
+        if (!arg){ termPrint("usage: genre <name>  e.g. 'genre jazz'", "err"); break; }
+        setSource("radio", { skipAutoLoad: true });
+        termPrint("loading " + arg + " stations...", "out");
+        loadRadioGenre(arg);
+        switchView("browse");
+        break;
+      }
+      case "top": {
+        setSource("radio", { skipAutoLoad: true });
+        termPrint("loading top stations worldwide...", "out");
+        loadTopStations();
+        switchView("browse");
+        break;
+      }
+      case "queue": {
+        if (!state.queue.length){ termPrint("queue is empty.", "err"); break; }
+        termPrintMulti(state.queue.map((t,i)=> "  " + (state.current && t.id===state.current.id ? ">" : " ") + " [" + String(i+1).padStart(2,"0") + "] " + t.title + " Â· " + t.artist));
+        break;
+      }
+      case "import":
+        openFilePicker();
+        break;
+      case "diag": case "diagnostics": case "debug": {
+        runDiagnostics();
+        break;
+      }
+      default:
+        termPrint("command not found: " + cmd + ". type 'help' for a list of commands.", "err");
+    }
+  }
+
+  async function runDiagnostics(){
+    termPrint("running diagnostics...", "out");
+    termPrint("page origin: " + location.origin + "  (protocol: " + location.protocol + ")", "out");
+    termPrint("user agent: " + navigator.userAgent, "out");
+    termPrint("secure context: " + (window.isSecureContext ? "yes" : "no â some browser features may be blocked"), window.isSecureContext ? "ok" : "err");
+    termPrint("<input type=file> supported: " + (!!window.File && !!window.FileReader && !!window.FileList), "ok");
+    termPrint("Web Audio API supported: " + (!!(window.AudioContext || window.webkitAudioContext)), "ok");
+    termPrint("MediaSession API supported: " + ("mediaSession" in navigator), "out");
+    termPrint("audio element: paused=" + audio.paused + " volume=" + audio.volume.toFixed(2) + " muted=" + audio.muted, "out");
+    if (Visualizer.isSuspended()){
+      termPrint("Web Audio graph is SUSPENDED â sound will not reach speakers even though the audio element looks fine.", "err");
+      termPrint("fix: tap the play/pause button once (a direct tap sometimes unlocks it where the initial track tap didn't).", "hint");
+    } else {
+      termPrint("Web Audio graph state: ok (running or not yet created)", "ok");
+    }
+
+    termPrint("checking Radio Browser API reachability...", "out");
+    let anyMirrorOk = false;
+    for (const m of ["https://de1.api.radio-browser.info","https://nl1.api.radio-browser.info","https://at1.api.radio-browser.info"]){
+      try {
+        const res = await fetch(m + "/json/stats", { cache: "no-store" });
+        termPrint("  " + m + " -> HTTP " + res.status, res.ok ? "ok" : "err");
+        if (res.ok) anyMirrorOk = true;
+      } catch(e){
+        termPrint("  " + m + " -> unreachable (" + e.message + ")", "err");
+      }
+    }
+    if (!anyMirrorOk){
+      termPrint("no Radio Browser mirror reachable â radio will use the small offline fallback list until this clears.", "hint");
+      termPrint("this is usually a network/firewall/ad-blocker issue, not a bug in the app â try a different network or disable content blockers for this site.", "hint");
+    }
+
+    termPrint("local tracks loaded: " + state.localTracks.length, "out");
+    termPrint("radio tracks loaded: " + state.radioList.length + "  (mode: " + state.radioMode + ")", "out");
+    const blockedCount = state.radioList.filter(t=>t.blockedByMixedContent).length;
+    if (blockedCount) termPrint(blockedCount + " loaded station(s) are HTTP-only and blocked by this HTTPS page's mixed-content policy.", "hint");
+    termPrint("diagnostics complete.", "ok");
+  }
+
+  el.termInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){
+      runCommand(el.termInput.value);
+      el.termInput.value = "";
+    } else if (e.key === "ArrowUp"){
+      e.preventDefault();
+      if (!cmdHistory.length) return;
+      histIdx = histIdx < 0 ? cmdHistory.length-1 : Math.max(0, histIdx-1);
+      el.termInput.value = cmdHistory[histIdx];
+    } else if (e.key === "ArrowDown"){
+      e.preventDefault();
+      if (histIdx < 0) return;
+      histIdx++;
+      if (histIdx >= cmdHistory.length){ histIdx=-1; el.termInput.value=""; }
+      else el.termInput.value = cmdHistory[histIdx];
+    }
+  });
+  el.termHelpBtn.addEventListener("click", ()=> runCommand("help"));
+  el.quickCmds.addEventListener("click", function(e){
+    const btn = e.target.closest(".qcmd");
+    if (!btn) return;
+    runCommand(btn.dataset.cmd);
+  });
+
+  function bootSequence(){
+    let i=0;
+    function step(){
+      if (i < BOOT_LINES.length){
+        termPrint(BOOT_LINES[i], "boot");
+        i++;
+        setTimeout(step, 70);
+      }
+    }
+    step();
+  }
+
+  // ---------------------------------------------------------------------
+  // PLAYBACK ENGINE
+  // ---------------------------------------------------------------------
+  function loadAndPlay(track){
+    if (!track) return;
+    Visualizer.unlock(); // MUST run synchronously here, in the tap handler â see comment in Visualizer.unlock
+    state.current = track;
+    state.loading = true;
+    audio.src = track.url;
+    audio.play().then(()=>{
+      state.isPlaying = true;
+      state.loading = false;
+      Visualizer.unlock(); // some browsers only allow resume() right as playback actually begins
+      renderNowPlaying();
+      syncPlayButtons();
+      checkSilentAudioGraph();
+      if (track.type === "radio" && track.stationuuid) RadioBrowser.registerClick(track.stationuuid);
+    }).catch(()=>{
+      state.loading = false;
+      state.isPlaying = false;
+      showToast('Could not play "' + track.title + '" â source may block browser playback (CORS).');
+      renderNowPlaying();
+      syncPlayButtons();
+    });
+    renderNowPlaying();
+  }
+
+  // Watchdog: if the audio element reports "playing" but the Web Audio
+  // graph it's routed through is still suspended, sound is NOT actually
+  // reaching the speakers even though every other piece of state looks
+  // normal. This is the single most common cause of "radio plays but I
+  // hear nothing" on mobile â surface it instead of failing silently.
+  function checkSilentAudioGraph(){
+    setTimeout(function(){
+      if (audio.paused) return; // user paused/changed track already, nothing to warn about
+      if (Visualizer.isSuspended()){
+        showToast("Audio is silent â your browser blocked sound after this tap. Tap the play button once to unlock audio, then try again.");
+        termPrint("warning: audio graph is suspended â browser did not allow autoplay-adjacent audio to unlock. tap play/pause once to retry.", "err");
+      }
+    }, 400);
+  }
+
+  function playIndex(idx, list){
+    const l = list || activeList();
+    const track = l[idx];
+    if (!track){ termPrint("error: no item at index " + (idx+1), "err"); return; }
+    if (track.isNav){
+      handleServerRowTap(track);
+      return;
+    }
+    if (track.blockedByMixedContent){
+      showToast('"' + track.title + '" only streams over plain HTTP, which browsers block on this secure (HTTPS) page. Try a different station.');
+      termPrint('skipped "' + track.title + '" â HTTP-only stream blocked by mixed-content policy on HTTPS page.', "err");
+      return;
+    }
+    state.queue = l.filter(function(t){ return !t.isNav; });
+    loadAndPlay(track);
+    termPrint((track.type==="radio" ? "tuning to: " : "playing: ") + track.title + (track.artist ? " â " + track.artist : ""), "ok");
+    renderList();
+    switchView("nowplaying");
+  }
+
+  function handlePlayPause(){
+    if (!state.current){
+      showToast("Nothing loaded yet â pick something in Browse.");
+      switchView("browse");
+      return;
+    }
+    Visualizer.unlock();
+    if (state.isPlaying){
+      audio.pause();
+      state.isPlaying = false;
+    } else {
+      audio.play().then(()=>{
+        state.isPlaying = true;
+        Visualizer.unlock();
+        syncPlayButtons();
+        checkSilentAudioGraph();
+      }).catch(()=> showToast("Playback blocked."));
+    }
+    syncPlayButtons();
+  }
+
+  function handleNext(){
+    if (!state.queue.length || !state.current) return;
+    const idx = state.queue.findIndex(t=>t.id===state.current.id);
+    const nextIdx = (idx+1) % state.queue.length;
+    loadAndPlay(state.queue[nextIdx]);
+    renderList();
+  }
+  function handlePrev(){
+    if (!state.queue.length || !state.current) return;
+    const idx = state.queue.findIndex(t=>t.id===state.current.id);
+    const prevIdx = (idx-1+state.queue.length) % state.queue.length;
+    loadAndPlay(state.queue[prevIdx]);
+    renderList();
+  }
+
+  function setVolume(v){
+    state.volume = v;
+    state.muted = false;
+    audio.volume = v/100;
+    el.npVolSlider.value = v;
+    syncVolIcon();
+  }
+  function syncVolIcon(){
+    const muted = state.muted || state.volume === 0;
+    el.npVolIcon.innerHTML = muted
+      ? '<path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.06l2.45 2.45c.03-.16.05-.32.05-.48zM19 12c0 .94-.2 1.83-.55 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/>'
+      : '<path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+  }
+
+  // ---------------------------------------------------------------------
+  // VISUALIZER â colored terminal-style spectrum bars driven by the
+  // actual audio via the Web Audio API (AnalyserNode).
+  // ---------------------------------------------------------------------
+  const Visualizer = (function(){
+    let ctx = null;             // AudioContext
+    let sourceNode = null;      // MediaElementAudioSourceNode (created once, ever)
+    let analyser = null;
+    let freqData = null;
+    let rafId = null;
+    let canvas = null, cctx = null;
+    let barCount = 40;
+    let barLevels = [];         // smoothed bar heights, 0..1
+    let unavailable = false;    // true if CORS or context creation blocked analysis
+    let idlePhase = 0;
+
+    function ensureGraph(){
+      if (unavailable) return false;
+      if (ctx) return true;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) { unavailable = true; return false; }
+        const newCtx = new AC();
+        const newSource = newCtx.createMediaElementSource(audio);
+        const newAnalyser = newCtx.createAnalyser();
+        newAnalyser.fftSize = 128;
+        newAnalyser.smoothingTimeConstant = 0.75;
+        newSource.connect(newAnalyser);
+        newAnalyser.connect(newCtx.destination); // must reconnect to destination or audio goes silent
+        // only commit state once every step above has succeeded â
+        // a half-built graph (e.g. source created but never reconnected
+        // to destination) would leave the audio element silently muted
+        ctx = newCtx;
+        sourceNode = newSource;
+        analyser = newAnalyser;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        barLevels = new Array(barCount).fill(0);
+        return true;
+      } catch(e){
+        // Visualization is a cosmetic feature; if anything about building
+        // this graph fails, we bail out completely rather than risk leaving
+        // the audio element's output half-routed through a broken graph.
+        // Plain <audio> playback (no visualizer) continues working normally
+        // since we never got as far as calling createMediaElementSource
+        // successfully, or we did but immediately abandon the attempt.
+        unavailable = true;
+        ctx = null;
+        return false;
+      }
+    }
+
+    function resizeCanvas(){
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      cctx = canvas.getContext("2d");
+      cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function colorForBar(i, count){
+      // sweep black->white UI palette accents across the spectrum:
+      // low end green, mids white, high end red, with purple highlights
+      const t = i / (count - 1);
+      if (t < 0.15) return "#39ff6a";
+      if (t < 0.35) return "#8affa6";
+      if (t < 0.55) return "#ffffff";
+      if (t < 0.8) return "#c07dff";
+      return "#ff3b3b";
+    }
+
+    function draw(){
+      rafId = requestAnimationFrame(draw);
+      if (!cctx || !canvas) return;
+      const w = canvas.getBoundingClientRect().width;
+      const h = canvas.getBoundingClientRect().height;
+      cctx.clearRect(0, 0, w, h);
+
+      // faint grid, terminal-ish
+      cctx.strokeStyle = "rgba(255,255,255,0.05)";
+      cctx.lineWidth = 1;
+      for (let gy = 0; gy < h; gy += 20){
+        cctx.beginPath(); cctx.moveTo(0, gy + 0.5); cctx.lineTo(w, gy + 0.5); cctx.stroke();
+      }
+
+      const hasSignal = analyser && !audio.paused && !audio.ended;
+      if (hasSignal){
+        analyser.getByteFrequencyData(freqData);
+      }
+
+      const gap = 3;
+      const barW = (w - gap * (barCount - 1)) / barCount;
+      let anySignal = false;
+
+      for (let i = 0; i < barCount; i++){
+        let target;
+        if (hasSignal){
+          // sample the frequency bins non-linearly so low bars get more bins
+          const start = Math.floor(Math.pow(i / barCount, 1.5) * freqData.length);
+          const end = Math.max(start + 1, Math.floor(Math.pow((i + 1) / barCount, 1.5) * freqData.length));
+          let sum = 0, n = 0;
+          for (let k = start; k < end && k < freqData.length; k++){ sum += freqData[k]; n++; }
+          const avg = n ? sum / n / 255 : 0;
+          if (avg > 0.02) anySignal = true;
+          target = avg;
+        } else {
+          target = 0;
+        }
+        // smoothing
+        const prev = barLevels[i] || 0;
+        barLevels[i] = prev + (target - prev) * 0.35;
+      }
+
+      // If we have no real signal (analysis blocked by CORS on a live
+      // stream, or context not resumed yet) but audio IS playing, fall
+      // back to a gentle idle animation so the panel doesn't look dead.
+      const showIdle = !audio.paused && !audio.ended && !anySignal;
+      if (showIdle) idlePhase += 0.06;
+
+      for (let i = 0; i < barCount; i++){
+        let level = barLevels[i];
+        if (showIdle){
+          level = 0.12 + 0.10 * Math.abs(Math.sin(idlePhase + i * 0.4));
+        }
+        const barH = Math.max(2, level * h * 0.92);
+        const x = i * (barW + gap);
+        const y = h - barH;
+        cctx.fillStyle = colorForBar(i, barCount);
+        cctx.globalAlpha = 0.92;
+        cctx.fillRect(x, y, barW, barH);
+        // faint reflection cap
+        cctx.globalAlpha = 0.18;
+        cctx.fillRect(x, y - 2, barW, 2);
+        cctx.globalAlpha = 1;
+      }
+    }
+
+    let resizeListenerAttached = false;
+
+    return {
+      start(canvasEl){
+        canvas = canvasEl;
+        resizeCanvas();
+        if (!resizeListenerAttached){
+          window.addEventListener("resize", resizeCanvas);
+          resizeListenerAttached = true;
+        }
+        const graphReady = ensureGraph();
+        if (graphReady && ctx && ctx.state === "suspended"){
+          ctx.resume().catch(()=>{});
+        }
+        if (!rafId) draw();
+      },
+      // Call this SYNCHRONOUSLY from the actual click/tap handler, before
+      // audio.play(). Building the AudioContext lazily later (e.g. when the
+      // Now Playing view first renders) is too far from the user gesture on
+      // iOS Safari and many mobile Chromium builds â the context is created
+      // but browsers refuse to auto-resume it, and once
+      // createMediaElementSource() has run, the audio element's sound can
+      // ONLY reach the speakers through that (now-stuck-suspended) graph.
+      // That produces exactly this bug: audio.paused === false, currentTime
+      // advancing, no errors anywhere, but total silence.
+      unlock(){
+        const graphReady = ensureGraph();
+        if (graphReady && ctx && ctx.state === "suspended"){
+          ctx.resume().catch(()=>{});
+        }
+      },
+      resumeContext(){
+        // kept for any old call sites; now behaves the same as unlock()
+        this.unlock();
+      },
+      isSuspended(){
+        return !!ctx && ctx.state === "suspended";
+      },
+      stop(){
+        if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
+      }
+    };
+  })();
+
+  function ensureVisualizerRunning(){
+    if (state.activeView !== "nowplaying") return;
+    Visualizer.start(el.npCanvas);
+  }
+  function stopVisualizer(){
+    Visualizer.stop();
+  }
+
+  audio.addEventListener("timeupdate", function(){
+    state.progress = audio.currentTime;
+    updateProgressUI();
+  });
+  audio.addEventListener("durationchange", function(){
+    state.duration = audio.duration || 0;
+    updateProgressUI();
+  });
+  audio.addEventListener("ended", handleNext);
+  audio.addEventListener("error", function(){
+    state.isPlaying = false;
+    state.loading = false;
+    const code = audio.error ? audio.error.code : null;
+    const reasons = {
+      1: "playback aborted",
+      2: "network error â station may be offline, blocking your region, or requires HTTPS/CORS this app can't satisfy",
+      3: "the stream's audio format could not be decoded by this browser",
+      4: "this stream's format or URL isn't supported by your browser (often an HTTP-only stream on an HTTPS page, or a dead link)"
+    };
+    const reason = reasons[code] || "unknown playback error";
+    showToast("Couldn't play this station â " + reason + ".");
+    termPrint("playback error on \"" + (state.current ? state.current.title : "?") + "\": " + reason + " [code " + code + "]", "err");
+    syncPlayButtons();
+  });
+  audio.addEventListener("waiting", function(){ state.loading = true; syncPlayButtons(); });
+  audio.addEventListener("playing", function(){ state.loading = false; syncPlayButtons(); });
+
+  function updateProgressUI(){
+    const pct = state.current && state.current.isStream ? 100 : (state.duration ? (state.progress/state.duration*100) : 0);
+    el.npBarFill.style.width = pct + "%";
+    el.miniProgressFill.style.width = pct + "%";
+    el.npCur.textContent = state.current && state.current.isStream ? "LIVE" : fmtTime(state.progress);
+    el.npDur.textContent = state.current && state.current.isStream ? "â" : fmtTime(state.duration);
+  }
+
+  function syncPlayButtons(){
+    const icon = state.loading ? null : (state.isPlaying ? PAUSE_ICON : PLAY_ICON);
+    if (state.loading){
+      el.npPlayIcon.innerHTML = '<path d="M12 2a10 10 0 1 0 10 10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>';
+      el.npPlayIcon.classList.add(LOAD_ICON_CLASS);
+      el.miniPlayIcon.innerHTML = el.npPlayIcon.innerHTML;
+      el.miniPlayIcon.classList.add(LOAD_ICON_CLASS);
+    } else {
+      el.npPlayIcon.innerHTML = icon;
+      el.npPlayIcon.classList.remove(LOAD_ICON_CLASS);
+      el.miniPlayIcon.innerHTML = icon;
+      el.miniPlayIcon.classList.remove(LOAD_ICON_CLASS);
+    }
+    renderList();
+  }
+
+  // ---------------------------------------------------------------------
+  // FILE IMPORT
+  // ---------------------------------------------------------------------
+  const AUDIO_EXTENSIONS = ["mp3","m4a","aac","wav","ogg","oga","opus","flac","wma","webm","aiff","aif","alac","mp4"];
+  function looksLikeAudio(f){
+    if (f.type && f.type.startsWith("audio/")) return true;
+    // Some mobile pickers (Android SAF providers, iOS Files "On My iPhone",
+    // cloud providers) return an empty or generic type. Fall back to extension.
+    const ext = f.name.split(".").pop().toLowerCase();
+    return AUDIO_EXTENSIONS.includes(ext);
+  }
+  function handleFiles(fileList){
+    const all = Array.from(fileList);
+    const files = all.filter(looksLikeAudio);
+    if (!files.length){
+      showToast(all.length ? "Those files don't look like audio â try MP3, M4A, WAV, FLAC, AAC, or OGG." : "No files were selected.");
+      return;
+    }
+    const tracks = files.map(f=>{
+      const name = f.name.replace(/\.[^/.]+$/, "");
+      let artist = "Unknown Artist", title = name;
+      if (name.includes(" - ")){
+        const idx = name.indexOf(" - ");
+        artist = name.slice(0, idx).trim();
+        title = name.slice(idx+3).trim();
+      }
+      return { id: uid(), title, artist, album:"Local Files", url: URL.createObjectURL(f), isStream:false, type:"local" };
+    });
+    state.localTracks = state.localTracks.concat(tracks);
+    showToast("Imported " + tracks.length + " track(s) into Local Files.");
+    termPrint("imported " + tracks.length + " track(s) into /dev/local.", "ok");
+    if (state.source === "local") renderList();
+  }
+  function openFilePicker(){
+    // Re-created each time on some Android WebViews the change event won't
+    // re-fire if the same file is picked twice in a row unless the input
+    // is fresh, so we clear the value right before opening too.
+    el.fileInput.value = "";
+    el.fileInput.click();
+  }
+  el.fileInput.addEventListener("change", function(e){
+    if (e.target.files && e.target.files.length) handleFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  ["dragover"].forEach(evt=>{
+    document.addEventListener(evt, function(e){ e.preventDefault(); el.dragOverlay.classList.add("show"); });
+  });
+  document.addEventListener("dragleave", function(e){
+    if (e.clientX<=0 || e.clientY<=0 || e.clientX>=window.innerWidth || e.clientY>=window.innerHeight){
+      el.dragOverlay.classList.remove("show");
+    }
+  });
+  document.addEventListener("drop", function(e){
+    e.preventDefault();
+    el.dragOverlay.classList.remove("show");
+    if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+
+  // ---------------------------------------------------------------------
+  // VIEW SWITCHING
+  // ---------------------------------------------------------------------
+  function switchView(name){
+    state.activeView = name;
+    document.querySelectorAll(".view").forEach(v=> v.classList.remove("active"));
+    document.getElementById("view-" + name).classList.add("active");
+    document.querySelectorAll(".navbtn").forEach(b=>{
+      b.classList.toggle("active", b.dataset.view === name);
+    });
+    if (name === "nowplaying" && state.current){
+      // canvas was hidden (display:none ancestor) so it had a zero-size
+      // bounding rect until now â (re)start to force a correct resize
+      ensureVisualizerRunning();
+    } else {
+      stopVisualizer();
+    }
+  }
+  document.querySelectorAll(".navbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=> switchView(btn.dataset.view));
+  });
+
+  // ---------------------------------------------------------------------
+  // RENDERING
+  // ---------------------------------------------------------------------
+  function setSource(id, opts){
+    const wasRadio = state.source === "radio";
+    const skipAutoLoad = opts && opts.skipAutoLoad;
+    state.source = id;
+    state.searchQuery = "";
+    el.searchInput.value = "";
+    el.searchClear.style.display = "none";
+    renderChips();
+    renderRadioSubnav();
+    renderLocalImportBar();
+    renderServerConnectPanel();
+    renderList();
+    if (id === "radio" && !wasRadio && !skipAutoLoad && state.radioList.length === 0 && !state.radioLoading){
+      loadTopStations();
+    }
+    if (id === "homeserver" && state.serverConnected && state.serverList.length === 0){
+      showServerArtists();
+    }
+  }
+
+  function renderLocalImportBar(){
+    const bar = document.getElementById("localImportBar");
+    if (state.source !== "local"){ bar.classList.remove("show"); bar.innerHTML = ""; return; }
+    bar.classList.add("show");
+    bar.innerHTML = '<button id="localImportBtn">+ IMPORT AUDIO FILES FROM PHONE</button>';
+    document.getElementById("localImportBtn").addEventListener("click", openFilePicker);
+  }
+
+  function renderServerConnectPanel(){
+    const panel = document.getElementById("serverConnectPanel");
+    if (state.source !== "homeserver"){ panel.classList.remove("show"); panel.innerHTML = ""; renderServerBreadcrumb(); return; }
+    panel.classList.add("show");
+
+    if (state.serverConnected){
+      panel.innerHTML =
+        '<div class="sv-connected-row">' +
+          '<span class="sv-connected-info"><span class="dot"></span>connected Â· ' + escapeHtml(state.serverUrl.replace(/^https?:\/\//,"")) + '</span>' +
+          '<button class="sv-disconnect-btn" id="serverDisconnectBtn">DISCONNECT</button>' +
+        '</div>';
+      document.getElementById("serverDisconnectBtn").addEventListener("click", disconnectHomeServer);
+      renderServerBreadcrumb();
+      return;
+    }
+
+    panel.innerHTML =
+      '<div class="sv-label">CONNECT TO YOUR HOME SERVER</div>' +
+      '<div class="sv-row">' +
+        '<input id="serverUrlInput" placeholder="e.g. tablet.tailnet-name.ts.net:8765" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" value="' + escapeHtml(state.serverUrl || loadSavedServerUrl()) + '" />' +
+        '<button id="serverConnectBtn"' + (state.serverConnecting ? ' disabled' : '') + '>' + (state.serverConnecting ? 'CONNECTINGâ¦' : 'CONNECT') + '</button>' +
+      '</div>' +
+      (state.serverError ? '<div class="sv-error">' + escapeHtml(state.serverError) + '</div>' : '') +
+      '<div class="sv-hint">Run music_server.py on your tablet via Termux with Tailscale on for both devices, then enter the Tailscale hostname (or IP) and port here. HTTPS is required since this page is HTTPS.</div>';
+
+    const input = document.getElementById("serverUrlInput");
+    const btn = document.getElementById("serverConnectBtn");
+    btn.addEventListener("click", ()=> connectHomeServer(input.value));
+    input.addEventListener("keydown", function(e){
+      if (e.key === "Enter") connectHomeServer(input.value);
+    });
+    renderServerBreadcrumb();
+  }
+
+  function renderServerBreadcrumb(){
+    const bc = document.getElementById("serverBreadcrumb");
+    if (state.source !== "homeserver" || !state.serverConnected || state.serverPath.length === 0){
+      bc.classList.remove("show");
+      bc.innerHTML = "";
+      return;
+    }
+    bc.classList.add("show");
+    bc.innerHTML =
+      '<button class="bc-back" id="serverBackBtn">â back</button>' +
+      '<span class="bc-path">' + escapeHtml(serverBreadcrumbLabel()) + '</span>';
+    document.getElementById("serverBackBtn").addEventListener("click", serverGoBack);
+  }
+
+  function renderChips(){
+    el.sourceChips.innerHTML = "";
+    SOURCES.forEach(s=>{
+      const chip = document.createElement("button");
+      chip.className = "chip" + (state.source===s.id ? " active" : "");
+      chip.innerHTML = SOURCE_ICONS[s.id] + '<span>' + s.label + '</span><span class="led ' + (s.connected?"on":"") + '"></span>';
+      chip.addEventListener("click", ()=>{
+        setSource(s.id);
+        if (!s.connected && s.id !== "homeserver") showToast(s.label + " isn't connected yet â check the Sources tab for details.");
+      });
+      el.sourceChips.appendChild(chip);
+    });
+  }
+
+  const RADIO_TABS = [
+    { id:"top", label:"Top", icon:"â" },
+    { id:"country", label:"Country", icon:"ð" },
+    { id:"genre", label:"Genre", icon:"â«" },
+    { id:"search", label:"Search", icon:"â" }
+  ];
+
+  function renderRadioSubnav(){
+    const nav = document.getElementById("radioSubnav");
+    const panel = document.getElementById("pickerPanel");
+    if (state.source !== "radio"){
+      nav.classList.remove("show");
+      panel.classList.remove("show");
+      el.searchInput.placeholder = "search this source...";
+      return;
+    }
+    nav.classList.add("show");
+    nav.innerHTML = "";
+    RADIO_TABS.forEach(tab=>{
+      const btn = document.createElement("button");
+      btn.className = "subnav-btn" + (state.radioMode===tab.id ? " active" : "");
+      btn.innerHTML = "<span>" + tab.icon + "</span><span>" + tab.label + "</span>";
+      btn.addEventListener("click", ()=> onRadioTab(tab.id));
+      nav.appendChild(btn);
+    });
+
+    if (state.radioMode === "country" || state.radioMode === "genre"){
+      panel.classList.add("show");
+    } else {
+      panel.classList.remove("show");
+    }
+
+    el.searchInput.placeholder = state.radioMode === "search"
+      ? "search stations by name worldwide..."
+      : "filter these results...";
+  }
+
+  function onRadioTab(tabId){
+    state.radioMode = tabId;
+    setSearchQuery("");
+    if (tabId === "top"){
+      renderRadioSubnav();
+      loadTopStations();
+    } else if (tabId === "country"){
+      renderRadioSubnav();
+      showCountryPicker();
+    } else if (tabId === "genre"){
+      renderRadioSubnav();
+      showGenrePicker();
+    } else if (tabId === "search"){
+      renderRadioSubnav();
+      state.radioList = [];
+      state.radioLabel = "Search radio stations worldwide";
+      renderList();
+      setTimeout(()=> el.searchInput.focus(), 50);
+    }
+  }
+
+  async function showCountryPicker(){
+    const panel = document.getElementById("pickerPanel");
+    panel.innerHTML =
+      '<div class="picker-search"><input id="countryFilterInput" placeholder="filter countries..." autocomplete="off" /></div>' +
+      '<div class="picker-grid" id="countryGrid"><div class="picker-loading">loading countriesâ¦</div></div>';
+    const grid = document.getElementById("countryGrid");
+    const filterInput = document.getElementById("countryFilterInput");
+
+    if (!state.countriesLoaded){
+      try {
+        state.countryList = await RadioBrowser.countries();
+        state.countriesLoaded = true;
+      } catch(e){
+        grid.innerHTML = '<div class="picker-empty">couldn\'t load country list â check your connection.</div>';
+        return;
+      }
+    }
+    renderCountryGrid("");
+    filterInput.addEventListener("input", ()=> renderCountryGrid(filterInput.value));
+  }
+
+  function renderCountryGrid(filterText){
+    const grid = document.getElementById("countryGrid");
+    if (!grid) return;
+    const q = filterText.trim().toLowerCase();
+    const list = q ? state.countryList.filter(c=> c.name.toLowerCase().includes(q)) : state.countryList.slice(0, 60);
+    if (!list.length){ grid.innerHTML = '<div class="picker-empty">no countries match.</div>'; return; }
+    grid.innerHTML = "";
+    list.forEach(c=>{
+      const chip = document.createElement("button");
+      chip.className = "picker-chip";
+      chip.innerHTML = "<span>" + escapeHtml(c.name) + "</span><span class='cnt'>" + c.stationcount + "</span>";
+      chip.addEventListener("click", ()=>{
+        loadRadioCountry(c.name);
+        document.getElementById("pickerPanel").classList.remove("show");
+      });
+      grid.appendChild(chip);
+    });
+  }
+
+  async function showGenrePicker(){
+    const panel = document.getElementById("pickerPanel");
+    panel.innerHTML =
+      '<div class="picker-search"><input id="genreFilterInput" placeholder="filter genres..." autocomplete="off" /></div>' +
+      '<div class="picker-grid" id="genreGrid"><div class="picker-loading">loading genresâ¦</div></div>';
+    const grid = document.getElementById("genreGrid");
+    const filterInput = document.getElementById("genreFilterInput");
+
+    if (!state.tagsLoaded){
+      try {
+        state.tagList = await RadioBrowser.tags();
+        state.tagsLoaded = true;
+      } catch(e){
+        grid.innerHTML = '<div class="picker-empty">couldn\'t load genre list â check your connection.</div>';
+        return;
+      }
+    }
+    renderGenreGrid("");
+    filterInput.addEventListener("input", ()=> renderGenreGrid(filterInput.value));
+  }
+
+  function renderGenreGrid(filterText){
+    const grid = document.getElementById("genreGrid");
+    if (!grid) return;
+    const q = filterText.trim().toLowerCase();
+    const list = q ? state.tagList.filter(t=> t.name.toLowerCase().includes(q)) : state.tagList.slice(0, 60);
+    if (!list.length){ grid.innerHTML = '<div class="picker-empty">no genres match.</div>'; return; }
+    grid.innerHTML = "";
+    list.forEach(t=>{
+      const chip = document.createElement("button");
+      chip.className = "picker-chip";
+      chip.innerHTML = "<span>" + escapeHtml(t.name) + "</span><span class='cnt'>" + t.stationcount + "</span>";
+      chip.addEventListener("click", ()=>{
+        loadRadioGenre(t.name);
+        document.getElementById("pickerPanel").classList.remove("show");
+      });
+      grid.appendChild(chip);
+    });
+  }
+
+  function renderList(){
+    const list = activeList();
+    const liveFilterModes = state.source === "radio" && state.radioMode === "search";
+    const q = state.searchQuery.toLowerCase();
+    const filtered = (q && !liveFilterModes) ? list.filter(t => t.title.toLowerCase().includes(q) || (t.artist||"").toLowerCase().includes(q)) : list;
+
+    el.listLabel.textContent = state.source === "radio" ? state.radioLabel
+      : state.source === "homeserver" ? serverBreadcrumbLabel()
+      : "/DEV/" + state.source.toUpperCase();
+    el.listCount.textContent = filtered.length + " item" + (filtered.length===1?"":"s");
+    el.listContainer.innerHTML = "";
+
+    if (state.source === "radio" && state.radioLoading){
+      el.listContainer.innerHTML = '<div class="list-loading"><div class="spinner"></div><div>loading live stationsâ¦</div></div>';
+      return;
+    }
+    if (state.source === "homeserver" && state.serverConnecting){
+      el.listContainer.innerHTML = '<div class="list-loading"><div class="spinner"></div><div>connecting to home serverâ¦</div></div>';
+      return;
+    }
+
+    if (!filtered.length){
+      const wrap = document.createElement("div");
+      wrap.className = "empty-state";
+      if (state.source === "local"){
+        wrap.innerHTML = '<div class="big-icon">' + SOURCE_ICONS.local + '</div>' +
+          '<div>' + (list.length ? "no matches" : "/dev/local is empty") + '</div>' +
+          (list.length ? '' : '<button class="btn-outline" id="importBtnInline">IMPORT AUDIO FILES</button>') +
+          '<div class="hint">or drop audio files anywhere on this page</div>';
+        el.listContainer.appendChild(wrap);
+        const ib = document.getElementById("importBtnInline");
+        if (ib) ib.addEventListener("click", openFilePicker);
+      } else if (state.source === "radio"){
+        const isSearchIdle = state.radioMode === "search" && !state.searchQuery;
+        wrap.innerHTML = '<div class="big-icon">' + SOURCE_ICONS.radio + '</div>' +
+          '<div>' + (isSearchIdle ? "search stations by name" : "no matching stations") + '</div>' +
+          (isSearchIdle ? '<div class="hint">type above to search 50,000+ live stations worldwide.</div>' : '');
+        el.listContainer.appendChild(wrap);
+      } else if (state.source === "homeserver"){
+        wrap.innerHTML = '<div class="big-icon">' + SOURCE_ICONS.homeserver + '</div>' +
+          '<div>' + (state.serverConnected ? "no matches" : "not connected yet") + '</div>' +
+          (state.serverConnected ? '' : '<div class="hint">enter your server\'s URL above to browse your library.</div>');
+        el.listContainer.appendChild(wrap);
+      } else {
+        const s = SOURCES.find(x=>x.id===state.source);
+        wrap.innerHTML = '<div class="big-icon">' + SOURCE_ICONS[state.source] + '</div>' +
+          '<div>' + s.label + ' is not connected</div>' +
+          '<div class="hint">open the <span class="accent">Sources</span> tab to see what connecting this would take.</div>';
+        el.listContainer.appendChild(wrap);
+      }
+      return;
+    }
+
+    filtered.forEach((t,i)=>{
+      const isCurrent = !t.isNav && state.current && state.current.id === t.id;
+      const row = document.createElement("button");
+      row.className = "track-row" + (isCurrent ? " current" : "") + (t.blockedByMixedContent ? " blocked" : "") + (t.isNav ? " nav-row" : "");
+      const meta = t.type === "radio" && (t.codec || t.bitrate)
+        ? [t.codec, t.bitrate ? t.bitrate + "k" : ""].filter(Boolean).join(" Â· ")
+        : "";
+      let idxCell, badge;
+      if (t.isNav){
+        idxCell = t.navType === "artist" ? SOURCE_ICONS.homeserver : '<span class="nav-folder">â«</span>';
+        badge = '<span class="nav-chevron">âº</span>';
+      } else {
+        idxCell = isCurrent && state.isPlaying ? '<span class="playing-ico">â¶</span>' : String(i+1).padStart(2,"0");
+        badge = t.blockedByMixedContent
+          ? '<span class="live-badge blocked-badge">HTTP â </span>'
+          : (t.isStream ? '<span class="live-badge">' + (meta || "LIVE") + '</span>' : '');
+      }
+      row.innerHTML =
+        '<span class="track-idx">' + idxCell + '</span>' +
+        '<span class="track-main">' +
+          '<div class="track-title">' + escapeHtml(t.title) + '</div>' +
+          '<div class="track-artist">' + escapeHtml(t.artist||"") + (t.album ? " Â· " + escapeHtml(t.album) : "") + '</div>' +
+        '</span>' +
+        badge;
+      row.addEventListener("click", ()=> playIndex(i, filtered));
+      el.listContainer.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s){
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function renderNowPlaying(){
+    if (!state.current){
+      el.npEmpty.style.display = "flex";
+      el.npView.style.display = "none";
+      el.miniplayer.classList.remove("show");
+      stopVisualizer();
+      return;
+    }
+    el.npEmpty.style.display = "none";
+    el.npView.style.display = "flex";
+    el.miniplayer.classList.add("show");
+
+    el.npTitle.textContent = state.current.title;
+    el.npArtist.textContent = state.current.artist || "";
+    el.npAlbum.textContent = state.current.album || "";
+    el.npStatusLive.style.display = state.current.isStream ? "block" : "none";
+    el.npArtLive.classList.toggle("show", !!state.current.isStream);
+
+    el.miniTitle.textContent = state.current.title;
+    el.miniArtist.textContent = state.current.artist || "";
+
+    updateProgressUI();
+    ensureVisualizerRunning();
+  }
+
+  function renderSources(){
+    el.sourcesList.innerHTML = "";
+    SOURCES.forEach(s=>{
+      const card = document.createElement("div");
+      card.className = "source-card" + (state.source===s.id ? " is-active" : "");
+      card.innerHTML =
+        '<div class="sc-icon">' + SOURCE_ICONS[s.id] + '</div>' +
+        '<div class="sc-body">' +
+          '<div class="sc-title">' + s.label + '<span class="sc-status ' + (s.connected?"connected":"notconnected") + '">' + (s.connected?"CONNECTED":"NOT CONNECTED") + '</span></div>' +
+          '<div class="sc-desc">' + s.desc + '</div>' +
+          (s.connected
+            ? '<button class="sc-btn" data-action="browse" data-id="' + s.id + '">BROWSE</button>'
+            : '<button class="sc-btn" data-action="connect" data-id="' + s.id + '">CONNECT</button>') +
+        '</div>';
+      el.sourcesList.appendChild(card);
+    });
+    el.sourcesList.querySelectorAll(".sc-btn").forEach(btn=>{
+      btn.addEventListener("click", function(){
+        const id = btn.dataset.id;
+        if (btn.dataset.action === "browse"){
+          setSource(id);
+          switchView("browse");
+        } else if (id === "homeserver"){
+          setSource("homeserver");
+          switchView("browse");
+        } else {
+          runCommand("connect " + id);
+          switchView("terminal");
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // SEARCH
+  // ---------------------------------------------------------------------
+  function setSearchQuery(q){
+    state.searchQuery = q;
+    el.searchInput.value = q;
+    el.searchClear.style.display = q ? "block" : "none";
+    renderList();
+  }
+  let searchDebounce = null;
+  el.searchInput.addEventListener("input", function(){
+    clearTimeout(searchDebounce);
+    const v = el.searchInput.value;
+    el.searchClear.style.display = v ? "block" : "none";
+
+    if (state.source === "radio" && state.radioMode === "search"){
+      // live worldwide search â hits the API, needs a longer debounce
+      searchDebounce = setTimeout(()=>{
+        if (v.trim().length < 2){ state.radioList = []; renderList(); return; }
+        loadRadioSearch(v.trim());
+      }, 450);
+      return;
+    }
+
+    searchDebounce = setTimeout(()=>{ state.searchQuery = v; renderList(); }, 120);
+  });
+  el.searchClear.addEventListener("click", function(){
+    setSearchQuery("");
+  });
+
+  // ---------------------------------------------------------------------
+  // CONTROL BINDINGS
+  // ---------------------------------------------------------------------
+  el.npPlayBtn.addEventListener("click", handlePlayPause);
+  el.miniPlayBtn.addEventListener("click", handlePlayPause);
+  el.npPrev.addEventListener("click", handlePrev);
+  el.npNext.addEventListener("click", handleNext);
+  el.miniNextBtn.addEventListener("click", handleNext);
+  el.npVolSlider.addEventListener("input", function(){ setVolume(parseInt(el.npVolSlider.value,10)); });
+  el.npMuteBtn.addEventListener("click", function(){
+    state.muted = !state.muted;
+    audio.volume = state.muted ? 0 : state.volume/100;
+    syncVolIcon();
+  });
+
+  // tap on mini player (not on buttons) opens Now Playing
+  el.miniplayer.addEventListener("click", function(e){
+    if (e.target.closest("button")) return;
+    switchView("nowplaying");
+  });
+
+  // seek by tapping the progress bar (non-stream only)
+  document.getElementById("npBar").addEventListener("click", function(e){
+    if (!state.current || state.current.isStream || !state.duration) return;
+    const rect = this.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * state.duration;
+  });
+
+  // Media Session API for lockscreen controls
+  if ("mediaSession" in navigator){
+    navigator.mediaSession.setActionHandler("play", handlePlayPause);
+    navigator.mediaSession.setActionHandler("pause", handlePlayPause);
+    navigator.mediaSession.setActionHandler("previoustrack", handlePrev);
+    navigator.mediaSession.setActionHandler("nexttrack", handleNext);
+  }
+  function updateMediaSession(){
+    if (!("mediaSession" in navigator) || !state.current) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: state.current.title,
+      artist: state.current.artist || "",
+      album: state.current.album || "TERMPLAY"
+    });
+  }
+  audio.addEventListener("playing", updateMediaSession);
+
+  // spinner style
+  const styleTag = document.createElement("style");
+  styleTag.textContent = ".spin { animation: spin 1s linear infinite; transform-origin: center; } @keyframes spin { to { transform: rotate(360deg); } }";
+  document.head.appendChild(styleTag);
+
+  // ---------------------------------------------------------------------
+  // INIT
+  // ---------------------------------------------------------------------
+  setVolume(state.volume);
+  renderChips();
+  renderRadioSubnav();
+  renderLocalImportBar();
+  renderList();
+  renderSources();
+  renderNowPlaying();
+  bootSequence();
+  loadTopStations(); // radio is the default source â load top worldwide stations right away
+
+})();
+</script>
+</body>
+</html>
